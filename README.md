@@ -53,9 +53,16 @@ allows to acknowledge a process failure (making it disappear from the view and a
 ```
 
 
-It's possible to play with the system using a simplistic HTML interface. 
+It's possible to play with the system using a simplistic HTML interface. To run a server: 
 ```
 $ cd 1_voiding && go run .
 ``` 
 
+In order to make the process last longer, so you could observe the progress, run the server as following:
+```
+$ SLOW_DOWN=1 cd 1_voiding && go run .
+``` 
+
+
 The interface will be available under `http://localhost:8080`.
+
