@@ -72,14 +72,16 @@ func (s Service) handleMarkDocumentAsVoided(ctx context.Context, cmd interface{}
 	report := s.repo.GetOrCreate(markDocumentAsVoided.RecipientID)
 	if report.IsPublished {
 		return s.eventBus.Publish(ctx, &messages.MarkingDocumentAsVoidedFailed{
-			DocumentID:  markDocumentAsVoided.DocumentID,
-			RecipientID: markDocumentAsVoided.RecipientID,
+			DocumentID:    markDocumentAsVoided.DocumentID,
+			RecipientID:   markDocumentAsVoided.RecipientID,
+			CorrelationID: markDocumentAsVoided.CorrelationID,
 		})
 	}
 
 	return s.eventBus.Publish(ctx, &messages.MarkingDocumentAsVoidedSucceeded{
-		DocumentID:  markDocumentAsVoided.DocumentID,
-		RecipientID: markDocumentAsVoided.RecipientID,
+		DocumentID:    markDocumentAsVoided.DocumentID,
+		RecipientID:   markDocumentAsVoided.RecipientID,
+		CorrelationID: markDocumentAsVoided.CorrelationID,
 	})
 }
 

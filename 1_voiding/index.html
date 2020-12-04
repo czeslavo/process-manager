@@ -1,4 +1,14 @@
 <html>
+	{{if .Processes}}
+		<h1>Voiding processes</h1>
+		{{range .Processes}}
+			<h2>Process: {{.ID}}</h2>
+				<ul>
+					<li>State: {{.State}}</li>
+					<li>DocumentID: {{.DocumentID}}</li>
+				</ul>
+		{{end}}
+	{{end}}
 	<h1>Reports</h1>
 	{{range .Reports}}
 		<h2>Customer: {{.CustomerID}}</h2>

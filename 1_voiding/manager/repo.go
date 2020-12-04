@@ -1,6 +1,9 @@
 package manager
 
-import "sync"
+import (
+	"errors"
+	"sync"
+)
 
 type Repo struct {
 	sync.RWMutex
@@ -13,15 +16,15 @@ func NewRepo() *Repo {
 	}
 }
 
-func (r *Repo) GetOrCreateProcess(processID, documentID string) DocumentVoidingProcess {
-	r.Lock()
-	defer r.Unlock()
+func (r *Repo) GetProcess(processID string) (DocumentVoidingProcess, error) {
+	r.RLock()
+	defer r.RUnlock()
 
-	if process, ok := r.processes[processID]; !ok || !process.IsOngoing() {
-		return NewDocumentVoidingProcess(processID, documentID)
+	process, ok := r.processes[processID]
+	if !ok {
+		return DocumentVoidingProcess{}, errors.New("process not found")
 	}
-
-	return r.processes[processID]
+	return process, nil
 }
 
 func (r *Repo) GetOngoingForDocument(documentID string) (DocumentVoidingProcess, bool) {
@@ -31,6 +34,17 @@ func (r *Repo) GetOngoingForDocument(documentID string) (DocumentVoidingProcess,
 		}
 	}
 	return DocumentVoidingProcess{}, false
+}
+
+func (r *Repo) GetAllOngoingOrFailed() []DocumentVoidingProcess {
+	var processes []DocumentVoidingProcess
+	for _, p := range r.processes {
+		if p.IsOngoing() || p.State == MarkingDocumentAsVoidedFailed {
+			processes = append(processes, p)
+		}
+	}
+
+	return processes
 }
 
 func (r *Repo) Store(process DocumentVoidingProcess) {

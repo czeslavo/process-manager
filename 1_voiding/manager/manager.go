@@ -3,6 +3,8 @@ package manager
 import (
 	"context"
 	"fmt"
+	"os"
+	"time"
 
 	"github.com/ThreeDotsLabs/watermill/components/cqrs"
 	"github.com/czeslavo/process-manager/1_voiding/messages"
@@ -13,11 +15,13 @@ import (
 type DocumentVoidingProcessManager struct {
 	commandBus *cqrs.CommandBus
 	repo       *Repo
+	slowedDown bool
 }
 
 func NewDocumentVoidingProcessManager() *DocumentVoidingProcessManager {
 	return &DocumentVoidingProcessManager{
-		repo: NewRepo(),
+		repo:       NewRepo(),
+		slowedDown: os.Getenv("SLOW_DOWN") == "1",
 	}
 }
 
@@ -52,6 +56,10 @@ func (m DocumentVoidingProcessManager) GetProcessForDocument(documentID string) 
 	return m.repo.GetOngoingForDocument(documentID)
 }
 
+func (m DocumentVoidingProcessManager) GetAllOngoingOrFailed() []DocumentVoidingProcess {
+	return m.repo.GetAllOngoingOrFailed()
+}
+
 func (m DocumentVoidingProcessManager) handleDocumentVoidRequested(ctx context.Context, event interface{}) error {
 	documentVoidRequested := event.(*messages.DocumentVoidRequested)
 	fmt.Println("manager: document void requested event")
@@ -62,13 +70,13 @@ func (m DocumentVoidingProcessManager) handleDocumentVoidRequested(ctx context.C
 	}
 
 	processID := uuid.New().String()
-	process := m.repo.GetOrCreateProcess(processID, documentVoidRequested.DocumentID)
+	process := NewDocumentVoidingProcess(processID, documentVoidRequested.DocumentID, documentVoidRequested.RecipientID)
 
-	if err := m.commandBus.Send(ctx, &messages.MarkDocumentAsVoided{
-		DocumentID:  documentVoidRequested.DocumentID,
-		RecipientID: documentVoidRequested.RecipientID,
-	}); err != nil {
-		return errors.Wrap(err, "failed to send command")
+	m.slowDownIfConfigured()
+	if cmd := process.NextCommand(); cmd != nil {
+		if err := m.commandBus.Send(ctx, cmd); err != nil {
+			return errors.Wrap(err, "failed to send command")
+		}
 	}
 
 	m.repo.Store(process)
@@ -80,20 +88,19 @@ func (m DocumentVoidingProcessManager) handleMarkingDocumentAsVoidedSucceeded(ct
 	markingDocumentAsVoidedSucceeded := event.(*messages.MarkingDocumentAsVoidedSucceeded)
 	fmt.Println("manager: marking document as voided succeeded event")
 
-	processID := markingDocumentAsVoidedSucceeded.CorrelationID
-	process := m.repo.GetOrCreateProcess(
-		processID,
-		markingDocumentAsVoidedSucceeded.DocumentID,
-	)
+	process, err := m.repo.GetProcess(markingDocumentAsVoidedSucceeded.CorrelationID)
+	if err != nil {
+		return err
+	}
 	if err := process.MarkingDocumentAsVoidedSucceeded(); err != nil {
 		return err
 	}
 
-	if err := m.commandBus.Send(ctx, &messages.VoidDocument{
-		DocumentID:  markingDocumentAsVoidedSucceeded.DocumentID,
-		RecipientID: markingDocumentAsVoidedSucceeded.RecipientID,
-	}); err != nil {
-		return errors.Wrap(err, "failed to send command")
+	m.slowDownIfConfigured()
+	if cmd := process.NextCommand(); cmd != nil {
+		if err := m.commandBus.Send(ctx, cmd); err != nil {
+			return errors.Wrap(err, "failed to send command")
+		}
 	}
 
 	m.repo.Store(process)
@@ -105,15 +112,15 @@ func (m DocumentVoidingProcessManager) handleMarkingDocumentAsVoidedFailed(ctx c
 	markingDocumentAsVoidedFailed := event.(*messages.MarkingDocumentAsVoidedFailed)
 	fmt.Println("manager: marking document as voided failed event")
 
-	processID := markingDocumentAsVoidedFailed.CorrelationID
-	process := m.repo.GetOrCreateProcess(
-		processID,
-		markingDocumentAsVoidedFailed.DocumentID,
-	)
+	process, err := m.repo.GetProcess(markingDocumentAsVoidedFailed.CorrelationID)
+	if err != nil {
+		return err
+	}
 	if err := process.MarkingDocumentAsVoidedFailed(); err != nil {
 		return err
 	}
 
+	m.slowDownIfConfigured()
 	m.repo.Store(process)
 
 	return nil
@@ -123,16 +130,22 @@ func (m DocumentVoidingProcessManager) handleDocumentVoided(ctx context.Context,
 	documentVoided := event.(*messages.DocumentVoided)
 	fmt.Println("manager: document voided event")
 
-	processID := documentVoided.CorrelationID
-	process := m.repo.GetOrCreateProcess(
-		processID,
-		documentVoided.DocumentID,
-	)
-	if err := process.MarkingDocumentAsVoidedFailed(); err != nil {
+	process, err := m.repo.GetProcess(documentVoided.CorrelationID)
+	if err != nil {
+		return err
+	}
+	if err := process.DocumentVoided(); err != nil {
 		return err
 	}
 
+	m.slowDownIfConfigured()
 	m.repo.Store(process)
 
 	return nil
+}
+
+func (m DocumentVoidingProcessManager) slowDownIfConfigured() {
+	if m.slowedDown {
+		time.Sleep(time.Second * 5)
+	}
 }

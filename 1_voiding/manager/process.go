@@ -1,15 +1,19 @@
 package manager
 
+import "github.com/czeslavo/process-manager/1_voiding/messages"
+
 type DocumentVoidingProcess struct {
 	ID         string
 	DocumentID string
+	CustomerID string
 	State      State
 }
 
-func NewDocumentVoidingProcess(processID, documentID string) DocumentVoidingProcess {
+func NewDocumentVoidingProcess(processID, documentID, customerID string) DocumentVoidingProcess {
 	return DocumentVoidingProcess{
 		ID:         processID,
 		DocumentID: documentID,
+		CustomerID: customerID,
 		State:      VoidingRequested,
 	}
 }
@@ -44,4 +48,23 @@ func (p *DocumentVoidingProcess) DocumentVoided() error {
 func (p DocumentVoidingProcess) IsOngoing() bool {
 	isTerminated := p.State == DocumentVoided || p.State == MarkingDocumentAsVoidedFailed
 	return !isTerminated
+}
+
+func (p DocumentVoidingProcess) NextCommand() interface{} {
+	switch p.State {
+	case VoidingRequested:
+		return &messages.MarkDocumentAsVoided{
+			DocumentID:    p.DocumentID,
+			RecipientID:   p.CustomerID,
+			CorrelationID: p.ID,
+		}
+	case MarkingDocumentAsVoidedSucceeded:
+		return &messages.VoidDocument{
+			DocumentID:    p.DocumentID,
+			RecipientID:   p.CustomerID,
+			CorrelationID: p.ID,
+		}
+	default:
+		return nil
+	}
 }

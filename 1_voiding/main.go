@@ -155,8 +155,15 @@ func buildReadModel(reportsService *reports.Service, billingService *billing.Ser
 		IsPublished bool
 	}
 
+	type process struct {
+		State      string
+		ID         string
+		DocumentID string
+	}
+
 	type readModel struct {
-		Reports []report
+		Reports   []report
+		Processes []process
 	}
 
 	var reportsToDisplay []report
@@ -191,6 +198,20 @@ func buildReadModel(reportsService *reports.Service, billingService *billing.Ser
 			})
 	}
 
+	var processesToDisplay []process
+	for _, p := range processManager.GetAllOngoingOrFailed() {
+		processesToDisplay = append(
+			processesToDisplay, process{
+				State:      p.State.String(),
+				ID:         p.ID,
+				DocumentID: p.DocumentID,
+			})
+	}
+
 	sort.Slice(reportsToDisplay, func(i, j int) bool { return reportsToDisplay[i].CustomerID > reportsToDisplay[j].CustomerID })
-	return readModel{reportsToDisplay}
+	sort.Slice(processesToDisplay, func(i, j int) bool { return processesToDisplay[i].ID > processesToDisplay[j].ID })
+	return readModel{
+		Reports:   reportsToDisplay,
+		Processes: processesToDisplay,
+	}
 }

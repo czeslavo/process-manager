@@ -111,5 +111,8 @@ func (s *Service) handleVoidDocument(ctx context.Context, cmd interface{}) error
 	document.IsVoided = true
 	s.repo.Store(document.ID, document)
 
-	return nil
+	return s.eventBus.Publish(ctx, &messages.DocumentVoided{
+		DocumentID:    document.ID,
+		CorrelationID: requestDocumentVoiding.CorrelationID,
+	})
 }
