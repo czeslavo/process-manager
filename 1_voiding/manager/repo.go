@@ -36,10 +36,10 @@ func (r *Repo) GetOngoingForDocument(documentID string) (DocumentVoidingProcess,
 	return DocumentVoidingProcess{}, false
 }
 
-func (r *Repo) GetAllOngoingOrFailed() []DocumentVoidingProcess {
+func (r *Repo) GetAllOngoing() []DocumentVoidingProcess {
 	var processes []DocumentVoidingProcess
 	for _, p := range r.processes {
-		if p.IsOngoing() || p.State == MarkingDocumentAsVoidedFailed {
+		if p.IsOngoing() {
 			processes = append(processes, p)
 		}
 	}

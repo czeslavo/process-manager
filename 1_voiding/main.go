@@ -44,6 +44,7 @@ func main() {
 			var commandHandlers []cqrs.CommandHandler
 			commandHandlers = append(commandHandlers, billingService.CommandHandlers(eb)...)
 			commandHandlers = append(commandHandlers, reportsService.CommandHandlers(eb)...)
+			commandHandlers = append(commandHandlers, documentVoidingProcessManager.CommandHandlers()...)
 			return commandHandlers
 		},
 		CommandsPublisher: pubsub,
@@ -110,19 +111,33 @@ func runHttpServer(
 	billingService *billing.Service,
 	processManager *manager.DocumentVoidingProcessManager,
 ) {
-	http.HandleFunc("/void", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/documents/void", func(w http.ResponseWriter, r *http.Request) {
 		documentID := r.PostFormValue("id")
 		if err := commandBus.Send(ctx, &messages.RequestDocumentVoiding{
 			DocumentID: documentID,
 		}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
+
+		http.Redirect(w, r, "/", http.StatusMovedPermanently)
 	})
-	http.HandleFunc("/publish", func(w http.ResponseWriter, r *http.Request) {
+
+	http.HandleFunc("/reports/publish", func(w http.ResponseWriter, r *http.Request) {
 		customerID := r.PostFormValue("id")
 		if err := commandBus.Send(ctx, &messages.PublishReport{CustomerID: customerID}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
+
+		http.Redirect(w, r, "/", http.StatusMovedPermanently)
+	})
+
+	http.HandleFunc("/processes/ack", func(w http.ResponseWriter, r *http.Request) {
+		processID := r.PostFormValue("id")
+		if err := commandBus.Send(ctx, &messages.AcknowledgeProcessFailure{ProcessID: processID}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+
+		http.Redirect(w, r, "/", http.StatusMovedPermanently)
 	})
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

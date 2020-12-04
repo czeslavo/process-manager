@@ -45,8 +45,17 @@ func (p *DocumentVoidingProcess) DocumentVoided() error {
 	return nil
 }
 
+func (p *DocumentVoidingProcess) AcknowledgeFailure() error {
+	if err := p.State.canTransition(FailureAcknowledged); err != nil {
+		return err
+	}
+
+	p.State = FailureAcknowledged
+	return nil
+}
+
 func (p DocumentVoidingProcess) IsOngoing() bool {
-	isTerminated := p.State == DocumentVoided || p.State == MarkingDocumentAsVoidedFailed
+	isTerminated := p.State == DocumentVoided || p.State == FailureAcknowledged
 	return !isTerminated
 }
 

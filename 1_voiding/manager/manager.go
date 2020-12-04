@@ -52,12 +52,22 @@ func (m DocumentVoidingProcessManager) EventHandlers(commandBus *cqrs.CommandBus
 	}
 }
 
+func (m DocumentVoidingProcessManager) CommandHandlers() []cqrs.CommandHandler {
+	return []cqrs.CommandHandler{
+		messages.CommandHandlerFunc(
+			"AcknowledgeProcessFailure",
+			&messages.AcknowledgeProcessFailure{},
+			m.acknowledgeProcessFailure,
+		),
+	}
+}
+
 func (m DocumentVoidingProcessManager) GetProcessForDocument(documentID string) (DocumentVoidingProcess, bool) {
 	return m.repo.GetOngoingForDocument(documentID)
 }
 
 func (m DocumentVoidingProcessManager) GetAllOngoingOrFailed() []DocumentVoidingProcess {
-	return m.repo.GetAllOngoingOrFailed()
+	return m.repo.GetAllOngoing()
 }
 
 func (m DocumentVoidingProcessManager) handleDocumentVoidRequested(ctx context.Context, event interface{}) error {
@@ -135,6 +145,24 @@ func (m DocumentVoidingProcessManager) handleDocumentVoided(ctx context.Context,
 		return err
 	}
 	if err := process.DocumentVoided(); err != nil {
+		return err
+	}
+
+	m.slowDownIfConfigured()
+	m.repo.Store(process)
+
+	return nil
+}
+
+func (m DocumentVoidingProcessManager) acknowledgeProcessFailure(_ context.Context, cmd interface{}) error {
+	acknowledgeFailure := cmd.(*messages.AcknowledgeProcessFailure)
+	fmt.Println("manager: document voided event")
+
+	process, err := m.repo.GetProcess(acknowledgeFailure.ProcessID)
+	if err != nil {
+		return err
+	}
+	if err := process.AcknowledgeFailure(); err != nil {
 		return err
 	}
 

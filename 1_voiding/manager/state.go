@@ -2,13 +2,17 @@ package manager
 
 import "github.com/pkg/errors"
 
-// +------------------+      +-------------------------------+
-// | VoidingRequested | +--> | MarkingDocumentAsVoidedFailed |
-// +------------------+      +-------------------------------+
-//
-//         +                 +----------------------------------+          +----------------+
-//         +---------------> | MarkingDocumentAsVoidedSucceeded | +------> | DocumentVoided |
-//                           +----------------------------------+          +----------------+
+/*
+State machine describing the process:
+
+ +------------------+      +-------------------------------+          +----------------------+
+ | VoidingRequested | +--> | MarkingDocumentAsVoidedFailed | +------> | Failure Acknowledged |
+ +------------------+      +-------------------------------+          +----------------------+
+         |
+         +                 +----------------------------------+          +----------------+
+         +---------------> | MarkingDocumentAsVoidedSucceeded | +------> | DocumentVoided |
+                           +----------------------------------+          +----------------+
+*/
 
 type State string
 
@@ -17,6 +21,7 @@ const (
 	MarkingDocumentAsVoidedFailed    State = "marking-document-as-voided-failed"
 	MarkingDocumentAsVoidedSucceeded State = "marking-document-as-voided-succeeded"
 	DocumentVoided                   State = "document-voided"
+	FailureAcknowledged              State = "failure-acknowledged"
 )
 
 func (s State) String() string {
@@ -27,8 +32,9 @@ func (s State) canTransition(to State) error {
 	allowedStateTransitions := allowedTransitions{
 		VoidingRequested:                 []State{MarkingDocumentAsVoidedSucceeded, MarkingDocumentAsVoidedFailed},
 		MarkingDocumentAsVoidedSucceeded: []State{DocumentVoided},
-		MarkingDocumentAsVoidedFailed:    nil,
+		MarkingDocumentAsVoidedFailed:    []State{FailureAcknowledged},
 		DocumentVoided:                   nil,
+		FailureAcknowledged:              nil,
 	}
 
 	if !allowedStateTransitions.allowed(s, to) {

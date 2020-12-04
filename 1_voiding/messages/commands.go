@@ -29,3 +29,8 @@ type MarkDocumentAsVoided struct {
 type PublishReport struct {
 	CustomerID string
 }
+
+// Process manager
+type AcknowledgeProcessFailure struct {
+	ProcessID string
+}
