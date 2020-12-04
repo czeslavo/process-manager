@@ -1,0 +1,32 @@
+<html>
+	<h1>Reports</h1>
+	{{range .Reports}}
+		<h2>Customer: {{.CustomerID}}</h2>
+			<h3>Summary</h3>
+			<ul>
+				<li>Total amount: {{.TotalAmount}}</li>
+				<li>IsPublished: {{.IsPublished}}</li>
+			</ul>
+
+			<h3>Documents</h3>
+			<table>
+				<thead>
+				<tr>
+					<th>Amount</th>
+					<th>Document ID</th>
+					<th>Voided</th>
+					<th>Voiding process state</th>
+				</tr>
+				</thead>
+				{{range .Documents}}
+				<tr>
+					<td>{{.Amount}}</td>
+					<td>{{.ID}}</td>
+					<td>{{.IsVoided}}</td>
+					<td>{{.VoidingProcessState}}</td>
+					<td></td>
+				</tr>
+				{{end}}
+			</table>
+	{{end}}
+</html>

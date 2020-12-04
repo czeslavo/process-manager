@@ -7,18 +7,25 @@ type IssueDocument struct {
 	TotalAmount float64
 }
 
-type CompleteDocumentVoiding struct {
-	DocumentID  string
-	RecipientID string
+type RequestDocumentVoiding struct {
+	DocumentID string
 }
 
-type AbortDocumentVoiding struct {
+type VoidDocument struct {
 	DocumentID  string
 	RecipientID string
+
+	CorrelationID string
 }
 
 // Reports
 type MarkDocumentAsVoided struct {
 	DocumentID  string
 	RecipientID string
+
+	CorrelationID string
+}
+
+type PublishReport struct {
+	CustomerID string
 }

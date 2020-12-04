@@ -9,6 +9,11 @@ type Document struct {
 	ID          string
 	RecipientID string
 	TotalAmount float64 // float64 for simplicity
+	IsVoided    bool
+}
+
+func (d *Document) Void() {
+	d.IsVoided = true
 }
 
 type DocumentsRepo struct {

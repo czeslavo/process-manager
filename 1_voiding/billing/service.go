@@ -4,10 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pkg/errors"
-
 	"github.com/ThreeDotsLabs/watermill/components/cqrs"
 	"github.com/czeslavo/process-manager/1_voiding/messages"
+	"github.com/pkg/errors"
 )
 
 type Service struct {
@@ -30,6 +29,16 @@ func (s *Service) CommandHandlers(eventBus *cqrs.EventBus) []cqrs.CommandHandler
 			&messages.IssueDocument{},
 			s.handleIssueDocument,
 		),
+		messages.CommandHandlerFunc(
+			"RequestDocumentVoiding",
+			&messages.RequestDocumentVoiding{},
+			s.handleRequestDocumentVoiding,
+		),
+		messages.CommandHandlerFunc(
+			"VoidDocument",
+			&messages.VoidDocument{},
+			s.handleVoidDocument,
+		),
 	}
 }
 
@@ -37,9 +46,13 @@ func (s Service) EventHandlers() []cqrs.EventHandler {
 	return nil
 }
 
+func (s Service) GetDocument(id string) (Document, error) {
+	return s.repo.GetByID(id)
+}
+
 func (s Service) handleIssueDocument(ctx context.Context, cmd interface{}) error {
 	issueDocumentCmd := cmd.(*messages.IssueDocument)
-	fmt.Printf("billing: issue document command: %v\n", cmd)
+	fmt.Println("billing: issue document command")
 
 	if _, err := s.repo.GetByID(issueDocumentCmd.DocumentID); err == nil {
 		// document already issued
@@ -60,6 +73,43 @@ func (s Service) handleIssueDocument(ctx context.Context, cmd interface{}) error
 	}); err != nil {
 		return errors.Wrap(err, "failed to publish event")
 	}
+
+	return nil
+}
+
+func (s *Service) handleRequestDocumentVoiding(ctx context.Context, cmd interface{}) error {
+	requestDocumentVoiding := cmd.(*messages.RequestDocumentVoiding)
+	fmt.Println("billing: request document voiding command")
+
+	// Check if a document exists and is not voided yet. If it is, trigger the process of voiding.
+	document, err := s.repo.GetByID(requestDocumentVoiding.DocumentID)
+	if err != nil {
+		return errors.Wrapf(err, "could not get document by id: %s", requestDocumentVoiding.DocumentID)
+	}
+
+	if document.IsVoided {
+		// noop
+		return nil
+	}
+
+	return s.eventBus.Publish(ctx, &messages.DocumentVoidRequested{
+		DocumentID:  document.ID,
+		RecipientID: document.RecipientID,
+	})
+}
+
+func (s *Service) handleVoidDocument(ctx context.Context, cmd interface{}) error {
+	requestDocumentVoiding := cmd.(*messages.VoidDocument)
+	fmt.Println("billing: void document command")
+
+	// Check if a document exists and is not voided yet. If it is, trigger the process of voiding.
+	document, err := s.repo.GetByID(requestDocumentVoiding.DocumentID)
+	if err != nil {
+		return errors.Wrapf(err, "could not get document by id: %s", requestDocumentVoiding.DocumentID)
+	}
+
+	document.IsVoided = true
+	s.repo.Store(document.ID, document)
 
 	return nil
 }
