@@ -2,7 +2,7 @@ This repository is a place for experimenting with a concept of process managers 
 
 # What is a process manager?
 
-TODO
+Process Manager is an entity capable of processing domain events and issuing commands in reaction to them. It can keep its state persisted. It should not implement any complex domain rules. It can't do anything on its own - it calls other aggregates to complete parts of the process it manages. 
 
 ## Examples 
 
