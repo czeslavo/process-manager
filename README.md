@@ -1,4 +1,4 @@
-This repository is a place for experimenting with a concept of process manager (in CQRS context). 
+This repository is a place for experimenting with a concept of process managers (in CQRS context). 
 
 # What is a process manager?
 
@@ -21,8 +21,6 @@ is that a document cannot be voided if a report in which the document is include
 A user issues a **VoidDocument** command to Billing service which emits **DocumentVoidingRequested**, what triggers the process.
 There can be no more than 1 voiding process running for a single document at one time.
 
-
-
 #### Process prerequisites
 1. **DocumentIssued** event from Billing 
 
@@ -34,7 +32,7 @@ There can be no more than 1 voiding process running for a single document at one
 5. **Abort/CompleteDocumentVoiding** command to Billing 
 6. *(optional)* **AcknowledgeProcessFailure** command to process manager
 
-A process has its identifier which is passed along with commands and events related to it (as a correlation id). 
+A process has its identifier which is passed along with commands and events related to it as a correlation id. 
 
 What's important - the process manager creates process instances what makes them first class citizens - 
 they're very similar to any different aggregate. They keep their own state and make the process 
@@ -62,7 +60,5 @@ In order to make the process last longer, so you could observe the progress, run
 ```
 $ SLOW_DOWN=1 cd 1_voiding && go run .
 ``` 
-
-
 The interface will be available under `http://localhost:8080`.
 
