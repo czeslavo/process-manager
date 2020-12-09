@@ -4,6 +4,11 @@ This repository is a place for experimenting with a concept of process managers 
 
 Process Manager is an entity capable of processing domain events and issuing commands in reaction to them. It can keep its state persisted. It should not implement any complex domain rules. It can't do anything on its own - it calls other aggregates to complete parts of the process it manages. 
 
+Sources:
+* https://medium.com/@drozzy/long-running-processes-event-sourcing-cqrs-c87fbb2ca644
+* https://www.youtube.com/watch?v=WvjTCmeGlGA
+* https://www.enterpriseintegrationpatterns.com/patterns/messaging/ProcessManager.html
+
 ## Examples 
 
 ### [Voiding](1_voiding)
