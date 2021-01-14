@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/ThreeDotsLabs/watermill/components/cqrs"
 	"github.com/czeslavo/process-manager/1_voiding/messages"
@@ -82,7 +81,6 @@ func (m DocumentVoidingProcessManager) handleDocumentVoidRequested(ctx context.C
 	processID := uuid.New().String()
 	process := NewDocumentVoidingProcess(processID, documentVoidRequested.DocumentID, documentVoidRequested.RecipientID)
 
-	m.slowDownIfConfigured()
 	if cmd := process.NextCommand(); cmd != nil {
 		if err := m.commandBus.Send(ctx, cmd); err != nil {
 			return errors.Wrap(err, "failed to send command")
@@ -106,7 +104,6 @@ func (m DocumentVoidingProcessManager) handleMarkingDocumentAsVoidedSucceeded(ct
 		return err
 	}
 
-	m.slowDownIfConfigured()
 	if cmd := process.NextCommand(); cmd != nil {
 		if err := m.commandBus.Send(ctx, cmd); err != nil {
 			return errors.Wrap(err, "failed to send command")
@@ -130,7 +127,6 @@ func (m DocumentVoidingProcessManager) handleMarkingDocumentAsVoidedFailed(ctx c
 		return err
 	}
 
-	m.slowDownIfConfigured()
 	m.repo.Store(process)
 
 	return nil
@@ -148,7 +144,6 @@ func (m DocumentVoidingProcessManager) handleDocumentVoided(ctx context.Context,
 		return err
 	}
 
-	m.slowDownIfConfigured()
 	m.repo.Store(process)
 
 	return nil
@@ -166,14 +161,7 @@ func (m DocumentVoidingProcessManager) acknowledgeProcessFailure(_ context.Conte
 		return err
 	}
 
-	m.slowDownIfConfigured()
 	m.repo.Store(process)
 
 	return nil
-}
-
-func (m DocumentVoidingProcessManager) slowDownIfConfigured() {
-	if m.slowedDown {
-		time.Sleep(time.Second * 5)
-	}
 }
