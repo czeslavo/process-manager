@@ -1,9 +1,6 @@
 package processmanager_test
 
 import (
-	"context"
-	"github.com/ThreeDotsLabs/watermill"
-	"github.com/ThreeDotsLabs/watermill/message"
 	"testing"
 
 	processmanager "github.com/czeslavo/process-manager/2_lib"
@@ -27,10 +24,6 @@ func TestProcessManager(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, eventHandlers)
 
-	eventsSequence := []interface{}{
-
-	}
-
 }
 
 type voidingRequested struct {
@@ -43,7 +36,7 @@ var eventsMapping = map[interface{}]func(e interface{}) (processmanager.Event, e
 
 		return processmanager.Event{
 			CorrelationID: transportEvent.DocumentID,
-			Payload:
+			Payload:       nil,
 		}, nil
 	},
 }

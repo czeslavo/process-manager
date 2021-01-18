@@ -27,6 +27,8 @@ type Event struct {
 	Payload       interface{}
 }
 
+type Command interface{}
+
 type ProcessRepository interface {
 	Get(ctx context.Context, id string) (ProcessInstance, error)
 	Create(ctx context.Context, id string) (ProcessInstance, error)
