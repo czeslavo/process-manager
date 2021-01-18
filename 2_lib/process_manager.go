@@ -35,14 +35,14 @@ type ProcessRepository interface {
 	Save(ctx context.Context, process ProcessInstance) error
 }
 
+var ProcessInstanceNotFound = errors.New("process instance not found")
+
 type ProcessInstance interface {
-	Process(event Event) error
-	NextCommands() []interface{} // todo: define type
+	Handle(event Event) error
+	NextCommands() []Command
 	ID() string
 	State() string
 }
-
-var ProcessInstanceNotFound = errors.New("process instance not found")
 
 func New(cfg Config) (*ProcessManager, error) {
 	if cfg.UUIDProvider == nil {
@@ -93,7 +93,7 @@ func (m *ProcessManager) EventHandlers() ([]cqrs.EventHandler, error) {
 					return fmt.Errorf("failed to get process instance: %w", err)
 				}
 
-				if err := p.Process(domainEvent); err != nil {
+				if err := p.Handle(domainEvent); err != nil {
 					return fmt.Errorf("failed to process event: %w", err)
 				}
 
