@@ -67,3 +67,8 @@ $ SLOW_DOWN=1 cd 1_voiding && go run .
 ``` 
 The interface will be available under `http://localhost:8080`.
 
+### [Voiding with temporal.io](2_temporal)
+In this example instead of handling process management in the application I used [temporal.io](https://temporal.io). 
+Temporal is an orchestration tool which allows running so called _Workflows_, persisting their state, handling stuff 
+like retries on command failures etc. It's not specifically crafted for managing processes, but it [can be used for that](https://docs.temporal.io/docs/use-cases-long-running). 
+
