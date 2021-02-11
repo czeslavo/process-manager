@@ -2,6 +2,11 @@ package balance
 
 import (
 	"context"
+	"encoding/json"
+
+	"github.com/czeslavo/process-manager/2_temporal/events"
+
+	"github.com/ThreeDotsLabs/watermill/message"
 
 	"github.com/czeslavo/process-manager/2_temporal/workflows"
 	"github.com/pkg/errors"
@@ -9,30 +14,75 @@ import (
 	"go.temporal.io/sdk/client"
 )
 
-const taskQueueName = "trip_balance"
-
-type temporal struct {
-	client client.Client
-	logger logrus.FieldLogger
+type ReprocessTripHandler struct {
+	repo           *TripBalanceRepository
+	temporalClient *temporal
+	logger         logrus.FieldLogger
+	publisher      message.Publisher
 }
 
-func (c temporal) startWorkflow(ctx context.Context, correlationID string, reprocessType ReprocessType) error {
-	workflowName, err := getWorkflowName(reprocessType)
+func NewReprocessTripHandler(repo *TripBalanceRepository, publisher message.Publisher) (*ReprocessTripHandler, error) {
+	logger := logrus.New()
+	c, err := client.NewClient(client.Options{})
+	if err != nil {
+		return nil, err
+	}
 
-	run, err := c.client.ExecuteWorkflow(
-		ctx,
-		client.StartWorkflowOptions{
-			ID:        correlationID,
-			TaskQueue: taskQueueName,
-		},
-		workflowName,
-		// args?
-	)
+	t := &temporal{
+		client: c,
+		logger: logger,
+	}
+	return &ReprocessTripHandler{
+		repo:           repo,
+		logger:         logger,
+		temporalClient: t,
+		publisher:      publisher,
+	}, nil
+}
+
+func (h ReprocessTripHandler) HandleReprocess(ctx context.Context, tripUUID, correlationID string) error {
+	balance, err := h.repo.GetBalance(tripUUID)
 	if err != nil {
 		return err
 	}
 
-	c.logger.WithField("correlation_id", correlationID).WithField("run_id", run.GetRunID()).Info("Run started")
+	reprocessType, err := balance.ReprocessTrip(correlationID)
+	if err != nil {
+		return err
+	}
+
+	return h.temporalClient.startWorkflow(ctx, correlationID, reprocessType)
+}
+
+func (h ReprocessTripHandler) HandleReprocessFinished(ctx context.Context, tripUUID, correlationID string) error {
+	balance, err := h.repo.GetBalance(tripUUID)
+	if err != nil {
+		return err
+	}
+
+	if err := balance.ReprocessFinished(correlationID); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (h ReprocessTripHandler) HandleCreditNoteIssued(msg *message.Message) error {
+	var event events.CreditNoteIssued
+	if err := json.Unmarshal(msg.Payload, &event); err != nil {
+		return err
+	}
+
+	if err := h.temporalClient.client.SignalWorkflow(
+		msg.Context(),
+		event.CorrelationID,
+		"", // will use latest running workflow for this correlation id (in our case it's always one or none)
+		workflows.CreditNoteIssuedSignalName,
+		event,
+	); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -47,46 +97,4 @@ func getWorkflowName(reprocessType ReprocessType) (string, error) {
 	default:
 		return "", errors.New("unsupported reprocess type")
 	}
-}
-
-type ReprocessTripHandler struct {
-	repo *TripBalanceRepository
-}
-
-func (h ReprocessTripHandler) HandleReprocess(ctx context.Context, tripUUID, correlationID string) error {
-	logger := logrus.New()
-	c, err := client.NewClient(client.Options{})
-	if err != nil {
-		return err
-	}
-
-	balance, err := h.repo.GetBalance(tripUUID)
-	if err != nil {
-		return err
-	}
-
-	reprocessType, err := balance.ReprocessTrip(correlationID)
-	if err != nil {
-		return err
-	}
-
-	t := temporal{
-		client: c,
-		logger: logger,
-	}
-
-	return t.startWorkflow(ctx, correlationID, reprocessType)
-}
-
-func (h ReprocessTripHandler) HandleReprocessFinished(ctx context.Context, tripUUID, correlationID string) error {
-	balance, err := h.repo.GetBalance(tripUUID)
-	if err != nil {
-		return err
-	}
-
-	if err := balance.ReprocessFinished(correlationID); err != nil {
-		return err
-	}
-
-	return nil
 }
