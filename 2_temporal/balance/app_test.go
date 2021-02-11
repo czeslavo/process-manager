@@ -17,9 +17,13 @@ func TestTriggerReprocessTrip(t *testing.T) {
 	balance := NewTripBalance("trip-id", -0.54)
 	repo.SaveBalance(balance)
 
-	handler := &TriggerReprocessTripHandler{
+	handler := &ReprocessTripHandler{
 		repo: repo,
 	}
-	err := handler.Handle(ctx, balance.TripUUID(), "correlation-id")
+
+	cqrsFacade, router := pubsub(handler)
+	go router.Run(ctx)
+
+	err := handler.HandleReprocess(ctx, balance.TripUUID(), "correlation-id")
 	require.NoError(t, err)
 }

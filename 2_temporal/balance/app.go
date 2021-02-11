@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/czeslavo/process-manager/2_temporal/workflows"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"go.temporal.io/sdk/client"
 )
@@ -16,11 +17,7 @@ type temporal struct {
 }
 
 func (c temporal) startWorkflow(ctx context.Context, correlationID string, reprocessType ReprocessType) error {
-	var workflowName string
-	switch reprocessType {
-	case ReprocessTypeRefund:
-		workflowName = workflows.RefundWorkflowName
-	}
+	workflowName, err := getWorkflowName(reprocessType)
 
 	run, err := c.client.ExecuteWorkflow(
 		ctx,
@@ -29,6 +26,7 @@ func (c temporal) startWorkflow(ctx context.Context, correlationID string, repro
 			TaskQueue: taskQueueName,
 		},
 		workflowName,
+		// args?
 	)
 	if err != nil {
 		return err
@@ -38,11 +36,24 @@ func (c temporal) startWorkflow(ctx context.Context, correlationID string, repro
 	return nil
 }
 
-type TriggerReprocessTripHandler struct {
+func getWorkflowName(reprocessType ReprocessType) (string, error) {
+	switch reprocessType {
+	case ReprocessTypeRefund:
+		return workflows.RefundWorkflowName, nil
+	case ReprocessTypeAdditionalPayment:
+		return workflows.ChargeAdditionalAmountWorkflowName, nil
+	case ReprocessTypeChangedContractDetails:
+		return workflows.ReissueDocumentsWorkflowName, nil
+	default:
+		return "", errors.New("unsupported reprocess type")
+	}
+}
+
+type ReprocessTripHandler struct {
 	repo *TripBalanceRepository
 }
 
-func (h TriggerReprocessTripHandler) Handle(ctx context.Context, tripUUID, correlationID string) error {
+func (h ReprocessTripHandler) HandleReprocess(ctx context.Context, tripUUID, correlationID string) error {
 	logger := logrus.New()
 	c, err := client.NewClient(client.Options{})
 	if err != nil {
@@ -65,4 +76,17 @@ func (h TriggerReprocessTripHandler) Handle(ctx context.Context, tripUUID, corre
 	}
 
 	return t.startWorkflow(ctx, correlationID, reprocessType)
+}
+
+func (h ReprocessTripHandler) HandleReprocessFinished(ctx context.Context, tripUUID, correlationID string) error {
+	balance, err := h.repo.GetBalance(tripUUID)
+	if err != nil {
+		return err
+	}
+
+	if err := balance.ReprocessFinished(correlationID); err != nil {
+		return err
+	}
+
+	return nil
 }

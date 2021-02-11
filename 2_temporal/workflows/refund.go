@@ -7,6 +7,5 @@ const (
 )
 
 func Refund(ctx workflow.Context, tripUUID string) error {
-
 	return nil
 }
