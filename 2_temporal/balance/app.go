@@ -3,37 +3,66 @@ package balance
 import (
 	"context"
 
-	errors "github.com/pkg/errors"
+	"github.com/czeslavo/process-manager/2_temporal/workflows"
+	"github.com/sirupsen/logrus"
+	"go.temporal.io/sdk/client"
 )
 
-var repo = NewTripBalanceRepository()
+const taskQueueName = "trip_balance"
 
-func StartProcess(correlationID string) {
-	// here we would call temporal workflow
-
+type temporal struct {
+	client client.Client
+	logger logrus.FieldLogger
 }
 
-func TriggerReprocessTrip(ctx context.Context, tripUUID, amendmentID string) error {
-	balance, err := repo.GetBalance(tripUUID)
-	if err != nil {
-		return err
-	}
-
-	reprocessType, err := balance.ReprocessTrip(amendmentID)
-	if err != nil {
-		return err
-	}
-
+func (c temporal) startWorkflow(ctx context.Context, correlationID string, reprocessType ReprocessType) error {
+	var workflowName string
 	switch reprocessType {
 	case ReprocessTypeRefund:
-		StartProcess(amendmentID)
-	case ReprocessTypeAdditionalPayment:
-		StartProcess(amendmentID)
-	case ReprocessTypeChangedContractDetails:
-		StartProcess(amendmentID)
-	default:
-		return errors.New("unknown reprocess type")
+		workflowName = workflows.RefundWorkflowName
 	}
 
+	run, err := c.client.ExecuteWorkflow(
+		ctx,
+		client.StartWorkflowOptions{
+			ID:        correlationID,
+			TaskQueue: taskQueueName,
+		},
+		workflowName,
+	)
+	if err != nil {
+		return err
+	}
+
+	c.logger.WithField("correlation_id", correlationID).WithField("run_id", run.GetRunID()).Info("Run started")
 	return nil
+}
+
+type TriggerReprocessTripHandler struct {
+	repo *TripBalanceRepository
+}
+
+func (h TriggerReprocessTripHandler) Handle(ctx context.Context, tripUUID, correlationID string) error {
+	logger := logrus.New()
+	c, err := client.NewClient(client.Options{})
+	if err != nil {
+		return err
+	}
+
+	balance, err := h.repo.GetBalance(tripUUID)
+	if err != nil {
+		return err
+	}
+
+	reprocessType, err := balance.ReprocessTrip(correlationID)
+	if err != nil {
+		return err
+	}
+
+	t := temporal{
+		client: c,
+		logger: logger,
+	}
+
+	return t.startWorkflow(ctx, correlationID, reprocessType)
 }
