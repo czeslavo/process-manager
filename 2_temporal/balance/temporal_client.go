@@ -3,11 +3,11 @@ package balance
 import (
 	"context"
 
+	"github.com/czeslavo/process-manager/2_temporal/worker"
+
 	"github.com/sirupsen/logrus"
 	"go.temporal.io/sdk/client"
 )
-
-const taskQueueName = "trip_balance"
 
 type temporal struct {
 	client client.Client
@@ -21,15 +21,19 @@ func (c temporal) startWorkflow(ctx context.Context, correlationID string, repro
 		ctx,
 		client.StartWorkflowOptions{
 			ID:        correlationID,
-			TaskQueue: taskQueueName,
+			TaskQueue: worker.TaskQueue,
 		},
 		workflowName,
-		// args?
+		correlationID,
 	)
 	if err != nil {
 		return err
 	}
 
-	c.logger.WithField("correlation_id", correlationID).WithField("run_id", run.GetRunID()).Info("Run started")
+	c.logger.
+		WithField("correlation_id", correlationID).
+		WithField("run_id", run.GetRunID()).
+		WithField("reprocess_type", reprocessType).
+		Info("Run started")
 	return nil
 }
