@@ -52,6 +52,8 @@ func TestTriggerReprocessTrip(t *testing.T) {
 	err = handler.HandleReprocess(ctx, balance.TripUUID(), correlationID)
 	require.NoError(t, err)
 
+	time.Sleep(5 * time.Second)
+
 	msg := <-reprocessingFinishedEvents
 	msg.Ack()
 	var reprocessingFinished events.TripReprocessingFinished

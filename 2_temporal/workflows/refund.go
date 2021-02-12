@@ -33,11 +33,11 @@ func Refund(ctx workflow.Context, workflowParams balance.WorkflowParams) error {
 		logger.Info("Received signal for refunded")
 		wg.Done()
 	})
+	wg.Wait(ctx)
 
 	if err := workflow.ExecuteActivity(ctx, activities.ReprocessingFinishedActivity, workflowParams.TripUUID, workflowParams.CorrelationID).Get(ctx, nil); err != nil {
 		return err
 	}
 
-	wg.Wait(ctx)
 	return nil
 }
