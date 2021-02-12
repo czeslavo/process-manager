@@ -1,6 +1,9 @@
 frontend.enableClientVersionCheck:
   - value: true
     constraints: {}
+frontend.visibilityListMaxQPS:
+  - value: 100000
+    constraints: {}
 history.persistenceMaxQPS:
   - value: 3000
     constraints: {}
