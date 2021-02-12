@@ -2,38 +2,42 @@ package workflows
 
 import (
 	"github.com/czeslavo/process-manager/2_temporal/activities"
+	"github.com/czeslavo/process-manager/2_temporal/balance"
 	"github.com/czeslavo/process-manager/2_temporal/events"
 	"go.temporal.io/sdk/workflow"
 )
 
-const (
-	RefundWorkflowName = "refund-workflow"
-
-	CreditNoteIssuedSignalName = "credit-note-issued-signal"
-)
-
-func Refund(ctx workflow.Context, correlationID string) error {
+func Refund(ctx workflow.Context, workflowParams balance.WorkflowParams) error {
 	logger := workflow.GetLogger(ctx)
 
 	ctx = workflow.WithActivityOptions(ctx, activities.DefaultActivityOptions)
-	future := workflow.ExecuteActivity(ctx, activities.IssueCreditNoteActivity, correlationID)
-	err := future.Get(ctx, nil)
-	if err != nil {
+	workflow.ExecuteActivity(ctx, activities.IssueCreditNoteActivity, workflowParams.CorrelationID)
+	workflow.ExecuteActivity(ctx, activities.TriggerRefundActivity, workflowParams.CorrelationID)
+
+	creditNoteIssued := workflow.GetSignalChannel(ctx, balance.CreditNoteIssuedSignalName)
+	var creditNoteIssuedEvent events.CreditNoteIssued
+
+	refunded := workflow.GetSignalChannel(ctx, balance.RefundedSignalName)
+	var refundedEvent events.Refunded
+
+	wg := workflow.NewWaitGroup(ctx)
+	wg.Add(2)
+
+	workflow.Go(ctx, func(ctx workflow.Context) {
+		creditNoteIssued.Receive(ctx, &creditNoteIssuedEvent)
+		logger.Info("Received signal for credit note issued")
+		wg.Done()
+	})
+	workflow.Go(ctx, func(ctx workflow.Context) {
+		refunded.Receive(ctx, &refundedEvent)
+		logger.Info("Received signal for refunded")
+		wg.Done()
+	})
+
+	if err := workflow.ExecuteActivity(ctx, activities.ReprocessingFinishedActivity, workflowParams.TripUUID, workflowParams.CorrelationID).Get(ctx, nil); err != nil {
 		return err
 	}
 
-	creditNoteIssued := workflow.GetSignalChannel(ctx, CreditNoteIssuedSignalName)
-	var creditNoteIssuedEvent events.CreditNoteIssued
-	more := creditNoteIssued.Receive(ctx, &creditNoteIssuedEvent)
-
-	logger.Info(
-		"received credit note issued event",
-		"workflow_id",
-		workflow.GetInfo(ctx).WorkflowExecution.ID,
-		"event",
-		creditNoteIssuedEvent,
-		"more",
-		more,
-	)
+	wg.Wait(ctx)
 	return nil
 }

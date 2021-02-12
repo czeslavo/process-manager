@@ -21,7 +21,7 @@ func NewTripBalance(tripUUID string, b float64) TripBalance {
 	return TripBalance{b, tripUUID, ""}
 }
 
-func (b TripBalance) ReprocessTrip(amendmentID string) (ReprocessType, error) {
+func (b *TripBalance) ReprocessTrip(amendmentID string) (ReprocessType, error) {
 	if b.amendmentInProgress != "" {
 		return "", errors.Errorf("cannot start new reprocess, amendment in progress: %s", b.amendmentInProgress)
 	}

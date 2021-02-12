@@ -1,4 +1,4 @@
-package balance
+package balance_test
 
 import (
 	"context"
@@ -6,17 +6,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/czeslavo/process-manager/2_temporal/events"
-
-	"github.com/google/uuid"
-
-	"github.com/czeslavo/process-manager/2_temporal/activities"
-	"github.com/czeslavo/process-manager/2_temporal/workflows"
-
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/pubsub/gochannel"
+	"github.com/czeslavo/process-manager/2_temporal/activities"
+	"github.com/czeslavo/process-manager/2_temporal/balance"
+	"github.com/czeslavo/process-manager/2_temporal/events"
 	"github.com/czeslavo/process-manager/2_temporal/worker"
+	"github.com/czeslavo/process-manager/2_temporal/workflows"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,10 +25,12 @@ func TestTriggerReprocessTrip(t *testing.T) {
 
 	logger := watermill.NewStdLogger(true, true)
 	pubsub := gochannel.NewGoChannel(gochannel.Config{}, logger)
+	reprocessingFinishedEvents, err := pubsub.Subscribe(ctx, events.TripReprocessingFinishedTopic)
+	require.NoError(t, err)
 
-	repo := NewTripBalanceRepository()
+	repo := balance.NewTripBalanceRepository()
 
-	handler, err := NewReprocessTripHandler(repo, pubsub)
+	handler, err := balance.NewReprocessTripHandler(repo, pubsub)
 	require.NoError(t, err)
 
 	router := setupRouter(t, handler, pubsub, logger)
@@ -40,28 +40,29 @@ func TestTriggerReprocessTrip(t *testing.T) {
 	w, err := worker.NewWorker()
 	require.NoError(t, err)
 	require.NoError(t, workflows.RegisterWorkflows(w))
-	require.NoError(t, activities.RegisterActivities(w, pubsub))
+	require.NoError(t, activities.RegisterActivities(w, pubsub, repo))
 	require.NoError(t, w.Start())
 
-	balance := NewTripBalance("trip-id", -0.54)
+	balance := balance.NewTripBalance("trip-id", -0.54)
 	repo.SaveBalance(balance)
 
 	correlationID := uuid.NewString()
 	err = handler.HandleReprocess(ctx, balance.TripUUID(), correlationID)
 	require.NoError(t, err)
 
-	time.Sleep(10 * time.Minute)
+	<-reprocessingFinishedEvents
 }
 
 func setupRouter(
 	t *testing.T,
-	handler *ReprocessTripHandler,
+	handler *balance.ReprocessTripHandler,
 	pubsub *gochannel.GoChannel,
 	logger watermill.LoggerAdapter,
 ) *message.Router {
 	router, err := message.NewRouter(message.RouterConfig{}, logger)
 	require.NoError(t, err)
 
-	router.AddNoPublisherHandler("CreditNoteIssuedHandler", events.EventsTopic, pubsub, handler.HandleCreditNoteIssued)
+	router.AddNoPublisherHandler("CreditNoteIssuedHandler", events.CreditNoteIssuedTopic, pubsub, handler.HandleCreditNoteIssued)
+	router.AddNoPublisherHandler("RefundedHandler", events.RefundedTopic, pubsub, handler.HandleRefunded)
 	return router
 }

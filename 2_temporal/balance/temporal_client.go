@@ -14,24 +14,28 @@ type temporal struct {
 	logger logrus.FieldLogger
 }
 
-func (c temporal) startWorkflow(ctx context.Context, correlationID string, reprocessType ReprocessType) error {
+func (c temporal) startWorkflow(
+	ctx context.Context,
+	workflowParams WorkflowParams,
+	reprocessType ReprocessType,
+) error {
 	workflowName, err := getWorkflowName(reprocessType)
 
 	run, err := c.client.ExecuteWorkflow(
 		ctx,
 		client.StartWorkflowOptions{
-			ID:        correlationID,
+			ID:        workflowParams.CorrelationID,
 			TaskQueue: worker.TaskQueue,
 		},
 		workflowName,
-		correlationID,
+		workflowParams,
 	)
 	if err != nil {
 		return err
 	}
 
 	c.logger.
-		WithField("correlation_id", correlationID).
+		WithField("correlation_id", workflowParams.CorrelationID).
 		WithField("run_id", run.GetRunID()).
 		WithField("reprocess_type", reprocessType).
 		Info("Run started")

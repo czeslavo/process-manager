@@ -15,11 +15,7 @@ const (
 	IssueCreditNoteActivity = "IssueCreditNote"
 )
 
-type IssueCreditNoteHandler struct {
-	publisher message.Publisher
-}
-
-func (h IssueCreditNoteHandler) IssueCreditNote(ctx context.Context, correlationID string) error {
+func (h Handler) IssueCreditNote(ctx context.Context, correlationID string) error {
 	e := events.CreditNoteIssued{
 		CorrelationID: correlationID,
 	}
@@ -31,7 +27,7 @@ func (h IssueCreditNoteHandler) IssueCreditNote(ctx context.Context, correlation
 		return err
 	}
 
-	err = h.publisher.Publish(events.EventsTopic, message.NewMessage(
+	err = h.publisher.Publish(events.CreditNoteIssuedTopic, message.NewMessage(
 		uuid.NewString(),
 		b,
 	))
