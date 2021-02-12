@@ -2,6 +2,7 @@ package balance_test
 
 import (
 	"context"
+	"encoding/json"
 	"math/rand"
 	"testing"
 	"time"
@@ -25,6 +26,7 @@ func TestTriggerReprocessTrip(t *testing.T) {
 
 	logger := watermill.NewStdLogger(true, true)
 	pubsub := gochannel.NewGoChannel(gochannel.Config{}, logger)
+	defer pubsub.Close()
 	reprocessingFinishedEvents, err := pubsub.Subscribe(ctx, events.TripReprocessingFinishedTopic)
 	require.NoError(t, err)
 
@@ -50,7 +52,13 @@ func TestTriggerReprocessTrip(t *testing.T) {
 	err = handler.HandleReprocess(ctx, balance.TripUUID(), correlationID)
 	require.NoError(t, err)
 
-	<-reprocessingFinishedEvents
+	msg := <-reprocessingFinishedEvents
+	msg.Ack()
+	var reprocessingFinished events.TripReprocessingFinished
+	err = json.Unmarshal(msg.Payload, &reprocessingFinished)
+	require.NoError(t, err)
+
+	require.Equal(t, correlationID, reprocessingFinished.CorrelationID)
 }
 
 func setupRouter(
