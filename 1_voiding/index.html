@@ -1,58 +1,640 @@
-<html>
-	{{if .Processes}}
-		<h1>Voiding processes</h1>
-		{{range .Processes}}
-			<h2>Process: {{.ID}}</h2>
-			<ul>
-				<li>State: {{.State}}</li>
-				<li>DocumentID: {{.DocumentID}}</li>
-			</ul>
-			{{if eq .State "marking-document-as-voided-failed"}}
-				<form action="/processes/ack" method="post">
-					<input hidden type="text" name="id" value="{{.ID}}"/>
-					<input type="submit" value="Acknowledge process failed" />
-				</form>
-			{{end}}
-		{{end}}
-	{{end}}
-	<h1>Reports</h1>
-	{{range .Reports}}
-		<h2>Customer: {{.CustomerID}}</h2>
-			<h3>Summary</h3>
-			<ul>
-				<li>Total amount: {{.TotalAmount}}</li>
-				<li>IsPublished: {{.IsPublished}}</li>
-			</ul>
-			<form action="/reports/publish" method="post">
-				<input hidden type="text" name="id" value="{{.CustomerID}}"/>
-				<input type="submit" value="Publish report" />
-			</form>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Process Manager</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-		<h3>Documents</h3>
-			<table>
-				<thead>
-				<tr>
-					<th>Amount</th>
-					<th>Document ID</th>
-					<th>Voided</th>
-					<th>Voiding process state</th>
-					<th>Action</th>
-				</tr>
-				</thead>
-				{{range .Documents}}
-				<tr>
-					<td>{{.Amount}}</td>
-					<td>{{.ID}}</td>
-					<td>{{.IsVoided}}</td>
-					<td>{{.VoidingProcessState}}</td>
-					<td>
-						<form action="/documents/void" method="post">
-							<input hidden type="text" name="id" value="{{.ID}}"/>
-							<input type="submit" value="Void" />
-						</form>
-					</td>
-				</tr>
-				{{end}}
-			</table>
-	{{end}}
+        :root {
+            --bg: #0f1117;
+            --surface: #1a1d27;
+            --surface-2: #20233380;
+            --border: #2e3347;
+            --text: #e2e8f0;
+            --text-muted: #8892a4;
+            --accent: #6366f1;
+            --accent-dim: rgba(99, 102, 241, 0.15);
+            --accent-border: rgba(99, 102, 241, 0.3);
+            --green: #10b981;
+            --green-dim: rgba(16, 185, 129, 0.12);
+            --green-border: rgba(16, 185, 129, 0.3);
+            --yellow: #f59e0b;
+            --yellow-dim: rgba(245, 158, 11, 0.12);
+            --yellow-border: rgba(245, 158, 11, 0.3);
+            --red: #ef4444;
+            --red-dim: rgba(239, 68, 68, 0.12);
+            --red-border: rgba(239, 68, 68, 0.3);
+            --blue: #3b82f6;
+            --blue-dim: rgba(59, 130, 246, 0.12);
+            --blue-border: rgba(59, 130, 246, 0.3);
+            --radius: 8px;
+            --radius-lg: 12px;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 2rem 2.5rem;
+            line-height: 1.6;
+        }
+
+        /* ── Header ── */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 2.5rem;
+            padding-bottom: 1.25rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--accent), #818cf8);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .app-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .app-subtitle {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-top: 1px;
+        }
+
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 0.3rem 0.85rem;
+        }
+
+        .live-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--green);
+            animation: livePulse 2s infinite;
+        }
+
+        @keyframes livePulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
+            50% { opacity: 0.7; box-shadow: 0 0 0 4px rgba(16, 185, 129, 0); }
+        }
+
+        /* ── Section ── */
+        .section {
+            margin-bottom: 2rem;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            margin-bottom: 1rem;
+        }
+
+        .section-title {
+            font-size: 0.88rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+        }
+
+        .count-badge {
+            background: var(--accent-dim);
+            color: var(--accent);
+            border: 1px solid var(--accent-border);
+            border-radius: 20px;
+            padding: 1px 8px;
+            font-size: 0.72rem;
+            font-weight: 700;
+        }
+
+        /* ── Process cards ── */
+        .process-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 0.85rem;
+        }
+
+        .process-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.1rem 1.25rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            animation: fadeUp 0.3s ease both;
+        }
+
+        .process-card:hover {
+            border-color: rgba(99, 102, 241, 0.4);
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.06);
+        }
+
+        .process-card.is-failed {
+            border-color: var(--red-border);
+            background: rgba(239, 68, 68, 0.04);
+        }
+
+        .process-card.is-failed:hover {
+            border-color: var(--red);
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.08);
+        }
+
+        .mono-label {
+            font-size: 0.68rem;
+            font-family: monospace;
+            color: var(--text-muted);
+            margin-bottom: 0.25rem;
+            opacity: 0.7;
+        }
+
+        .mono-value {
+            font-size: 0.76rem;
+            font-family: monospace;
+            color: var(--text-muted);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-bottom: 0.85rem;
+        }
+
+        .process-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+        }
+
+        /* ── Badges ── */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            padding: 3px 9px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            white-space: nowrap;
+        }
+
+        .badge-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .badge-blue   { background: var(--blue-dim);   color: var(--blue);   border: 1px solid var(--blue-border); }
+        .badge-blue   .badge-dot { background: var(--blue); }
+        .badge-yellow { background: var(--yellow-dim); color: var(--yellow); border: 1px solid var(--yellow-border); }
+        .badge-yellow .badge-dot { background: var(--yellow); animation: livePulse 1.5s infinite; }
+        .badge-green  { background: var(--green-dim);  color: var(--green);  border: 1px solid var(--green-border); }
+        .badge-green  .badge-dot { background: var(--green); }
+        .badge-red    { background: var(--red-dim);    color: var(--red);    border: 1px solid var(--red-border); }
+        .badge-red    .badge-dot { background: var(--red); animation: livePulse 1.2s infinite; }
+        .badge-gray   { background: rgba(139,146,164,0.1); color: var(--text-muted); border: 1px solid rgba(139,146,164,0.2); }
+        .badge-gray   .badge-dot { background: var(--text-muted); }
+        .badge-purple { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent-border); }
+        .badge-purple .badge-dot { background: var(--accent); }
+
+        /* ── Report cards ── */
+        .report-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            margin-bottom: 1rem;
+            animation: fadeUp 0.3s ease both;
+            transition: box-shadow 0.2s;
+        }
+
+        .report-card:hover {
+            box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+        }
+
+        .report-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface-2);
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .customer-label {
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin-bottom: 3px;
+        }
+
+        .customer-id {
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .report-meta {
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+        }
+
+        .amount-label {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            margin-bottom: 2px;
+        }
+
+        .amount-value {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--text);
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* ── Table ── */
+        .table-wrap {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+        }
+
+        thead th {
+            padding: 0.65rem 1.5rem;
+            text-align: left;
+            font-size: 0.68rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+        }
+
+        tbody td {
+            padding: 0.8rem 1.5rem;
+            border-bottom: 1px solid rgba(46, 51, 71, 0.6);
+            vertical-align: middle;
+        }
+
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        tbody tr {
+            transition: background 0.1s;
+        }
+
+        tbody tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .doc-id-cell {
+            font-family: monospace;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            max-width: 180px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .amount-cell {
+            font-variant-numeric: tabular-nums;
+            font-weight: 500;
+        }
+
+        .empty-cell {
+            color: var(--text-muted);
+            font-size: 0.78rem;
+        }
+
+        /* ── Report footer / actions ── */
+        .report-actions {
+            padding: 0.85rem 1.5rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+            background: var(--surface-2);
+        }
+
+        /* ── Buttons ── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.45rem 1rem;
+            border-radius: 6px;
+            border: 1px solid transparent;
+            cursor: pointer;
+            font-size: 0.78rem;
+            font-weight: 600;
+            font-family: inherit;
+            transition: all 0.15s;
+            white-space: nowrap;
+            text-decoration: none;
+        }
+
+        .btn:hover { transform: translateY(-1px); }
+        .btn:active { transform: none; }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+        .btn-primary:hover {
+            background: #5254cc;
+            border-color: #5254cc;
+            box-shadow: 0 0 14px rgba(99, 102, 241, 0.45);
+        }
+
+        .btn-danger {
+            background: var(--red-dim);
+            color: var(--red);
+            border-color: var(--red-border);
+        }
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.22);
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.2);
+        }
+
+        .btn-warning {
+            background: var(--yellow-dim);
+            color: var(--yellow);
+            border-color: var(--yellow-border);
+        }
+        .btn-warning:hover {
+            background: rgba(245, 158, 11, 0.22);
+        }
+
+        .btn-sm {
+            padding: 0.3rem 0.7rem;
+            font-size: 0.73rem;
+        }
+
+        form { display: inline; margin: 0; }
+
+        /* ── Empty state ── */
+        .empty-state {
+            text-align: center;
+            padding: 3.5rem 1rem;
+            color: var(--text-muted);
+        }
+
+        .empty-icon {
+            opacity: 0.25;
+            margin-bottom: 0.75rem;
+        }
+
+        .empty-text {
+            font-size: 0.88rem;
+        }
+
+        /* ── Animations ── */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .process-card:nth-child(1) { animation-delay: 0ms; }
+        .process-card:nth-child(2) { animation-delay: 40ms; }
+        .process-card:nth-child(3) { animation-delay: 80ms; }
+        .process-card:nth-child(4) { animation-delay: 120ms; }
+        .process-card:nth-child(5) { animation-delay: 160ms; }
+        .process-card:nth-child(n+6) { animation-delay: 200ms; }
+
+        .report-card:nth-child(1) { animation-delay: 0ms; }
+        .report-card:nth-child(2) { animation-delay: 60ms; }
+        .report-card:nth-child(3) { animation-delay: 120ms; }
+        .report-card:nth-child(n+4) { animation-delay: 180ms; }
+
+        tbody tr {
+            animation: fadeUp 0.25s ease both;
+        }
+        tbody tr:nth-child(1)  { animation-delay: 20ms; }
+        tbody tr:nth-child(2)  { animation-delay: 40ms; }
+        tbody tr:nth-child(3)  { animation-delay: 60ms; }
+        tbody tr:nth-child(4)  { animation-delay: 80ms; }
+        tbody tr:nth-child(5)  { animation-delay: 100ms; }
+        tbody tr:nth-child(n+6){ animation-delay: 120ms; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div class="header-left">
+        <div class="logo">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+        </div>
+        <div>
+            <div class="app-title">Process Manager</div>
+            <div class="app-subtitle">Document voiding &amp; report dashboard</div>
+        </div>
+    </div>
+    <div class="live-indicator">
+        <div class="live-dot"></div>
+        Live &mdash; refresh in <span id="countdown" style="font-variant-numeric:tabular-nums; min-width:1ch; display:inline-block;">5</span>s
+    </div>
+</div>
+
+{{if .Processes}}
+<div class="section">
+    <div class="section-header">
+        <div class="section-title">Active Processes</div>
+        <div class="count-badge">{{len .Processes}}</div>
+    </div>
+    <div class="process-grid">
+        {{range .Processes}}
+        {{$failed := eq .State "marking-document-as-voided-failed"}}
+        <div class="process-card {{if $failed}}is-failed{{end}}">
+            <div class="mono-label">Process ID</div>
+            <div class="mono-value">{{.ID}}</div>
+            <div class="mono-label">Document ID</div>
+            <div class="mono-value">{{.DocumentID}}</div>
+            <div class="process-footer">
+                {{if eq .State "voiding-requested"}}
+                    <span class="badge badge-blue"><span class="badge-dot"></span>Voiding Requested</span>
+                {{else if eq .State "marking-document-as-voided-succeeded"}}
+                    <span class="badge badge-green"><span class="badge-dot"></span>Succeeded</span>
+                {{else if $failed}}
+                    <span class="badge badge-red"><span class="badge-dot"></span>Failed</span>
+                {{else if eq .State "document-voided"}}
+                    <span class="badge badge-green"><span class="badge-dot"></span>Voided</span>
+                {{else if eq .State "failure-acknowledged"}}
+                    <span class="badge badge-gray"><span class="badge-dot"></span>Acknowledged</span>
+                {{else}}
+                    <span class="badge badge-gray"><span class="badge-dot"></span>{{.State}}</span>
+                {{end}}
+                {{if $failed}}
+                <form action="/processes/ack" method="post">
+                    <input type="hidden" name="id" value="{{.ID}}"/>
+                    <button type="submit" class="btn btn-warning btn-sm">Acknowledge</button>
+                </form>
+                {{end}}
+            </div>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}
+
+<div class="section">
+    <div class="section-header">
+        <div class="section-title">Customer Reports</div>
+        <div class="count-badge">{{len .Reports}}</div>
+    </div>
+
+    {{if .Reports}}
+    {{range .Reports}}
+    <div class="report-card">
+        <div class="report-header">
+            <div>
+                <div class="customer-label">Customer</div>
+                <div class="customer-id">{{.CustomerID}}</div>
+            </div>
+            <div class="report-meta">
+                <div>
+                    <div class="amount-label">Total Amount</div>
+                    <div class="amount-value">${{.TotalAmount}}</div>
+                </div>
+                {{if .IsPublished}}
+                    <span class="badge badge-green"><span class="badge-dot"></span>Published</span>
+                {{else}}
+                    <span class="badge badge-gray"><span class="badge-dot"></span>Draft</span>
+                {{end}}
+            </div>
+        </div>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Document ID</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Voiding State</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {{range .Documents}}
+                <tr>
+                    <td><span class="doc-id-cell">{{.ID}}</span></td>
+                    <td class="amount-cell">${{.Amount}}</td>
+                    <td>
+                        {{if .IsVoided}}
+                            <span class="badge badge-gray"><span class="badge-dot"></span>Voided</span>
+                        {{else}}
+                            <span class="badge badge-green"><span class="badge-dot"></span>Active</span>
+                        {{end}}
+                    </td>
+                    <td>
+                        {{if .VoidingProcessState}}
+                            {{if eq .VoidingProcessState "voiding-requested"}}
+                                <span class="badge badge-blue"><span class="badge-dot"></span>Requested</span>
+                            {{else if eq .VoidingProcessState "marking-document-as-voided-succeeded"}}
+                                <span class="badge badge-green"><span class="badge-dot"></span>Succeeded</span>
+                            {{else if eq .VoidingProcessState "marking-document-as-voided-failed"}}
+                                <span class="badge badge-red"><span class="badge-dot"></span>Failed</span>
+                            {{else if eq .VoidingProcessState "document-voided"}}
+                                <span class="badge badge-green"><span class="badge-dot"></span>Voided</span>
+                            {{else if eq .VoidingProcessState "failure-acknowledged"}}
+                                <span class="badge badge-gray"><span class="badge-dot"></span>Ack&rsquo;d</span>
+                            {{else}}
+                                <span class="badge badge-gray"><span class="badge-dot"></span>{{.VoidingProcessState}}</span>
+                            {{end}}
+                        {{else}}
+                            <span class="empty-cell">&mdash;</span>
+                        {{end}}
+                    </td>
+                    <td>
+                        {{if not .IsVoided}}
+                        <form action="/documents/void" method="post">
+                            <input type="hidden" name="id" value="{{.ID}}"/>
+                            <button type="submit" class="btn btn-danger btn-sm">Void</button>
+                        </form>
+                        {{else}}
+                            <span class="empty-cell">&mdash;</span>
+                        {{end}}
+                    </td>
+                </tr>
+                {{end}}
+                </tbody>
+            </table>
+        </div>
+
+        {{if not .IsPublished}}
+        <div class="report-actions">
+            <form action="/reports/publish" method="post">
+                <input type="hidden" name="id" value="{{.CustomerID}}"/>
+                <button type="submit" class="btn btn-primary">Publish Report</button>
+            </form>
+        </div>
+        {{end}}
+    </div>
+    {{end}}
+    {{else}}
+    <div class="empty-state">
+        <div class="empty-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+                <polyline points="10 9 9 9 8 9"/>
+            </svg>
+        </div>
+        <div class="empty-text">No reports yet &mdash; waiting for data&hellip;</div>
+    </div>
+    {{end}}
+</div>
+
+<script>
+    let t = 5;
+    const el = document.getElementById('countdown');
+    setInterval(() => {
+        t--;
+        el.textContent = t;
+        if (t <= 0) location.reload();
+    }, 1000);
+</script>
+</body>
 </html>
